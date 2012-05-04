@@ -68,6 +68,8 @@
       <packagereq type="default">ruby</packagereq>
       <packagereq type="default">rubygems</packagereq>
       <packagereq type="default">chef</packagereq>
+      <packagereq type="default">rubygem-highline</packagereq>
+      <packagereq type="default">rubygem-mime-types</packagereq>
     </packagelist>
   </group>
 

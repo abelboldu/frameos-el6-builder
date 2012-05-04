@@ -5,11 +5,11 @@
 
 Gem::Specification.new do |s|
   s.name = %q{frameos-builder}
-  s.version = "0.2.1"
+  s.version = "0.3.1"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Sergio Rubio"]
-  s.date = %q{2010-08-04}
+  s.date = %q{2010-10-14}
   s.default_executable = %q{frameos-builder}
   s.email = %q{sergio@rubio.name}
   s.executables = ["frameos-builder"]
@@ -61,6 +61,7 @@ Gem::Specification.new do |s|
      "packages/frameos-release-5-6.b2.el5.frameos.x86_64.rpm",
      "packages/frameos-release-notes-5.5-0.x86_64.rpm",
      "packages/redhat-logos-4.9.99-12.el5.frameos.noarch.rpm",
+     "packages/rootfiles-8.1-1.1.1.noarch.rpm",
      "packages/ruby-1.8.7-1frameos.x86_64.rpm",
      "packages/ruby-shadow-1.4.1-7.el5.x86_64.rpm",
      "packages/rubygem-abstract-1.0.0-2.el5.noarch.rpm",
@@ -68,7 +69,9 @@ Gem::Specification.new do |s|
      "packages/rubygem-chef-0.9.6-3.el5.noarch.rpm",
      "packages/rubygem-erubis-2.6.5-2.el5.noarch.rpm",
      "packages/rubygem-extlib-0.9.13-5.el5.noarch.rpm",
+     "packages/rubygem-highline-1.5.2-1.el5.frameos.noarch.rpm",
      "packages/rubygem-json-1.1.9-1.el5.x86_64.rpm",
+     "packages/rubygem-mime-types-1.16-3.el5.noarch.rpm",
      "packages/rubygem-mixlib-authentication-1.1.2-1.el5.noarch.rpm",
      "packages/rubygem-mixlib-cli-1.2.0-1.el5.noarch.rpm",
      "packages/rubygem-mixlib-config-1.1.0-2.el5.noarch.rpm",
@@ -91,6 +94,7 @@ Gem::Specification.new do |s|
      "resources/lang-table",
      "resources/minpkglist",
      "resources/options.msg",
+     "scripts/build-iso.sh",
      "tools/corepkgs_centos5_x86_64",
      "tools/onlycore.rb",
      "vendor/cache/choice-0.1.4.gem",
@@ -115,14 +119,14 @@ Gem::Specification.new do |s|
   s.homepage = %q{http://frameos.org}
   s.rdoc_options = ["--charset=UTF-8"]
   s.require_paths = ["lib"]
-  s.rubygems_version = %q{1.3.5}
+  s.rubygems_version = %q{1.3.7}
   s.summary = %q{FrameOS ISO image builder}
 
   if s.respond_to? :specification_version then
     current_version = Gem::Specification::CURRENT_SPECIFICATION_VERSION
     s.specification_version = 3
 
-    if Gem::Version.new(Gem::RubyGemsVersion) >= Gem::Version.new('1.2.0') then
+    if Gem::Version.new(Gem::VERSION) >= Gem::Version.new('1.2.0') then
     else
     end
   else

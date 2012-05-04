@@ -1,43 +1,60 @@
 #!/usr/bin/env ruby
 require File.join(File.dirname(__FILE__), "../lib/frameos-builder")
 require File.join(File.dirname(__FILE__), '../vendor/gems/choice-0.1.4/lib/choice')
+  
+puts
+puts "FrameOS Builder Version " +  FRAMEOS_BUILDER_VERSION
+puts 
+
+begin
+  require 'term/ansicolor'
+rescue Exception => e
+  $stderr.puts 'term-ansicolor gem not installed. Install it first.'
+  exit
+end
 
 Log = Logger.new(File.open('/dev/null', 'w'))
 Log.level = Logger::INFO
 
 def main
+  
   begin
+
+    # We are creating a project, exit after that
+    if not Choice.choices[:project].nil?
+      return 
+    end
+
+    if not requirements_ok? 
+      raise Exception.new("Missing some requirements. Aborting.")
+    end
+
     #
     # run the script as root
     #
-    
-    if not requirements_ok? 
-      raise Exception.new "Missing some requirements. Aborting."
-    end
-
     if `whoami`.strip.chomp != 'root'
       err = "You need to run this script as root"
-      raise Exception.new err
+      raise Exception.new(err)
     end 
 
     if not supported_environment?
       err = "Environment not supported. You need to run frameos-builder in CentOS 5."
-      raise Exception.new err
+      raise Exception.new(err)
     end
 
-    info 'Setting up the environment'
+    info 'Setting up the environment...'
     Dir.mkdir TMPDIR
-    Dir.mkdir "#{TMPDIR}/iso"
+    Dir.mkdir("#{TMPDIR}/iso")
 
     `mount -o loop #{ISOFILE} #{TMPDIR}/iso`
     if $?.exitstatus != 0
       error "Could't mount the ISO file #{ISOFILE}"
-      raise Exception.new EXIT_MOUNTFAILED
+      raise Exception.new(EXIT_MOUNTFAILED)
     end
 
     info 'Copying ISO contents...'
     FileUtils.cp_r "#{TMPDIR}/iso", "#{TMPDIR}/newiso"
-    FileUtils.mv   "#{TMPDIR}/newiso/CentOS", "#{TMPDIR}/newiso/FrameOS"
+    FileUtils.mv   "#{TMPDIR}/newiso/Packages", "#{TMPDIR}/newiso/FrameOS"
 
     #
     # Remove non-core pkgs
@@ -51,7 +68,7 @@ def main
     #
     # Copy frameos kickstart files
     #
-    info "Copy FrameOS config files"
+    info "Copying FrameOS config files..."
     gen_isolinux_file 
 
     #
@@ -63,7 +80,8 @@ def main
     #
     # Replace comps.xml
     #
-    info "Updating comps.xml file"
+    info "Updating comps.xml file..."
+    debug "Using comps.xml file from #{Choice.choices[:comps_file]}"
     FileUtils.cp Choice.choices[:comps_file], "#{TMPDIR}/newiso/repodata/"
 
     #
@@ -87,11 +105,11 @@ def main
     #
     # Adding boot files
     # 
-    info "Adding GRUB splash image"
+    info "Adding GRUB splash image..."
     FileUtils.cp Choice.choices[:grub_splash_image], "#{TMPDIR}/newiso/splash.xpm.gz"
-    info "Adding ISOLINUX splash image"
+    info "Adding ISOLINUX splash image..."
     FileUtils.cp Choice.choices[:isolinux_splash_image], "#{TMPDIR}/newiso/isolinux/splash.lss"
-    info "Adding ISOLINUX boot msg"
+    info "Adding ISOLINUX boot msg..."
     if not File.exist? Choice.choices[:isolinux_boot_msg]
       error "WARNING: Invalid boot.msg file, skipping."
     else
@@ -115,10 +133,11 @@ def main
     #
     # Rebrand the installer
     #
-    info "Rebranding the installer..."
+    info "Building initrd..."
     do_initrd_branding("#{TMPDIR}/newiso/isolinux/initrd.img", Choice.choices[:product_name], Choice.choices[:product_version], Choice.choices[:product_bugs_url])
 
-    do_stage2_branding("#{TMPDIR}/newiso/images/stage2.img", 
+    info "Building stage2 image..."
+    do_stage2_branding("#{TMPDIR}/newiso/images/install.img", 
                        Choice.choices[:product_name], 
                        Choice.choices[:product_version], 
                        Choice.choices[:product_bugs_url], 
@@ -128,10 +147,12 @@ def main
                       )
 
     info "Adding release notes"
-    FileUtils.rm_f Dir["#{TMPDIR}/newiso/NOTES/RELEASE-NOTES*"]
+    #FIXME, layout changed in recent CentOS 5 releases (> 5.5)
+    #FileUtils.rm_f Dir["#{TMPDIR}/newiso/NOTES/RELEASE-NOTES*"]
     FileUtils.rm_f Dir["#{TMPDIR}/newiso/RELEASE-NOTES*"]
     Choice.choices[:release_notes].each do |rn|
-      FileUtils.cp rn , "#{TMPDIR}/newiso/NOTES/"
+      # Not found in CentOS >= 5.6
+      #FileUtils.cp rn , "#{TMPDIR}/newiso/NOTES/"
       FileUtils.cp rn , "#{TMPDIR}/newiso/"
     end
 
@@ -172,10 +193,27 @@ Choice.options do
     end
   end
 
-  option :source_iso, :required => true do
+  option :log_level do
+    long '--log-level=LEVEL'
+    action do |opt|
+      case opt
+      when '1'
+        info 'Setting Log level to INFO'
+        Log.level = Logger::INFO
+      when '2'
+        info 'Setting Log level to WARN'
+        Log.level = Logger::WARN
+      when '3'
+        info 'Setting Log level to DEBUG'
+        Log.level = Logger::DEBUG
+      end
+    end
+  end
+
+  option :source_iso do
     short '-s'
     long '--source-iso=SOURCE'
-    desc 'Source CentOS/RHEL iso to use (REQUIRED)'
+    desc 'Source CentOS/RHEL iso to use'
   end
 
   option :version do
@@ -252,7 +290,7 @@ Choice.options do
     default "#{RESOURCES_DIR}/comps.xml"
     action do |opt|
       if not File.exist?(opt)
-        $stderr.puts "WARNING: specified comps.xml does not exist. Using default."
+        warn "specified comps.xml does not exist. Using default."
         default "#{RESOURCES_DIR}/comps.xml"
       end
     end
@@ -263,7 +301,7 @@ Choice.options do
     default "#{RESOURCES_DIR}/isolinux.cfg.erb"
     action do |opt|
       if not File.exist?(opt)
-        $stderr.puts "WARNING: specified isolinux template does not exist. Using default."
+        warn "specified isolinux template does not exist. Using default."
         default "#{RESOURCES_DIR}/isolinux.cfg.erb"
       end
     end
@@ -273,20 +311,71 @@ Choice.options do
     long '--release-notes=*NOTES'
     default ["#{RESOURCES_DIR}/RELEASE-NOTES-en", "#{RESOURCES_DIR}/RELEASE-NOTES-en.html"]
     action do |opt|
-      if not File.exist?(opt)
-        $stderr.puts "WARNING: specified file does not exist. Using default."
-        default ["#{RESOURCES_DIR}/RELEASE-NOTES-en", "#{RESOURCES_DIR}/RELEASE-NOTES-en.html"]
+      opt.each do |f|
+        if not File.exist?(f)
+          $stderr.puts "WARNING: specified file does not exist. Using default."
+          default ["#{RESOURCES_DIR}/RELEASE-NOTES-en", "#{RESOURCES_DIR}/RELEASE-NOTES-en.html"]
+        end
       end
     end
   end
 
   option :custom_anaconda_pkg do
     long '--custom-anaconda-pkg=PKG'
-    default "#{PACKAGES_DIR}/anaconda-11.1.2.195-2.el5.frameos.x86_64.rpm"
+    default default_anaconda_pkg
+    action do |opt|
+      if not File.exist?(opt)
+        warn "Custom anaconda pkg not found. Using defaults."
+        default default_anaconda_pkg
+      end
+    end
   end
   option :custom_redhat_logos_pkg do
     long '--custom-redhat-logos-pkg=PKG'
-    default "#{PACKAGES_DIR}/redhat-logos-4.9.99-12.el5.frameos.noarch.rpm"
+    default default_redhat_logos_pkg
+    action do |opt|
+      if not File.exist?(opt)
+        warn "Custom redhat-logos pkg not found. Using defaults."
+        default default_redhat_logos_pkg
+      end
+    end
+  end
+
+  option :project do
+    long '--project=PROJECT'
+    action do |opt|
+      if File.exist? opt
+        $stderr.puts "Directory #{opt} already exists."
+        exit
+      else
+        info "Creating project structure..."
+        path = File.expand_path opt
+        Dir.mkdir path
+        FileUtils.cp_r PACKAGES_DIR, path
+        FileUtils.cp_r RESOURCES_DIR, path
+        FileUtils.cp_r IMAGES_DIR, path
+        File.open "#{opt}/build-iso.sh", 'w' do |f|
+          f.puts """frameos-builder -s CentOS-5.5-x86_64-bin-1of8.iso \\
+                -o #{opt}.iso \\
+                --product-name 'FrameOS' \\
+                --product-version '5.5b2' \\
+                --product-bugs-url 'http://support.frameos.org' \\
+                --custom-anaconda-pkg packages/#{default_anaconda_pkg(opt + '/packages')} \\
+                --custom-redhat-logos-pkg packages/#{default_redhat_logos_pkg(opt + '/packages')} \\
+                --ks-files resources/frameos.ks resources/frameos-virtio.ks resources/frameos-ide.ks \\
+                --grub-splash-image images/grub/splash.xpm.gz \\
+                --isolinux-splash-image images/isolinux/splash.lss \\
+                --isolinux-boot-msg resources/boot.msg \\
+                --isolinux-options-msg resources/options.msg \\
+                --comps-file resources/comps.xml \\
+                --isolinux-config-template resources/isolinux.cfg.erb \\
+                --extra-pkgs-dir packages/ \\
+                --release-notes resources/RELEASE-NOTES-en.html resources/RELEASE-NOTES-en
+          """
+
+        end
+      end
+    end
   end
 end
 if Choice.choices[:skip_cleanup]
@@ -296,6 +385,10 @@ else
 end
 
 ISOFILE=Choice.choices[:source_iso]
+if (ISOFILE.nil? or not File.exist?(ISOFILE)) and Choice.choices[:project].nil?
+  error 'ISO file argument required. See --help'
+  exit 1
+end
 
 TBEGIN = Time.now
 main

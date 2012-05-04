@@ -5,7 +5,7 @@ require 'logger'
 require 'fileutils'
 require File.join(File.dirname(__FILE__), "rpmdev")
 
-FRAMEOS_BUILDER_VERSION = '0.2.1'
+FRAMEOS_BUILDER_VERSION = '0.3.1'
 TMPDIR = '/tmp/frameos-builder'
 RESOURCES_DIR = File.join(File.dirname(__FILE__),'../resources')
 IMAGES_DIR = File.join(File.dirname(__FILE__),'../images')
@@ -44,6 +44,20 @@ def supported_environment?
   return true
 end
 
+def default_pkg(pkg_name, base_dir = PACKAGES_DIR)
+  pkg = Dir["#{base_dir}/*.rpm"].find { |pkg| pkg =~ /#{pkg_name}-\d+.*/ }
+  return (pkg.split '/').last
+end
+
+def default_anaconda_pkg(base_dir = PACKAGES_DIR)
+  default_pkg 'anaconda', base_dir
+end
+
+def default_redhat_logos_pkg(base_dir = PACKAGES_DIR)
+  default_pkg 'redhat-logos', base_dir
+end
+
+
 def do_initrd_branding(initrd_file, product_name='FrameOS', 
                                     product_version = '1', 
                                     bugs_url = 'http://bugs.frameos.org')
@@ -51,7 +65,7 @@ def do_initrd_branding(initrd_file, product_name='FrameOS',
   # check if gzip, find and cpio are present
   #
   Dir.mkdir "#{TMPDIR}/initrd.dir"
-  `cd #{TMPDIR}/initrd.dir && gzip -dc #{initrd_file} | cpio -iud`
+  `cd #{TMPDIR}/initrd.dir && gzip -dc #{initrd_file} | cpio --quiet -iud`
   File.open "#{TMPDIR}/initrd.dir/.buildstamp","w" do |f|
     f.puts "#{Time.now.strftime '%Y%m%d0001.x86_64'}"
     f.puts product_name
@@ -59,7 +73,7 @@ def do_initrd_branding(initrd_file, product_name='FrameOS',
     f.puts product_name
     f.puts bugs_url
   end
-  `cd #{TMPDIR}/initrd.dir && find ./|cpio -H newc -o > #{TMPDIR}/initrd`
+  `cd #{TMPDIR}/initrd.dir && find ./|cpio --quiet -H newc -o > #{TMPDIR}/initrd`
   `cd #{TMPDIR} && gzip initrd && mv initrd.gz initrd.img`
   `cd #{TMPDIR} && cp initrd.img newiso/isolinux/`
   if CLEANUP_ENV
@@ -90,8 +104,9 @@ def do_stage2_branding(stage2_file,
   end
 
   if custom_anaconda_pkg
+    debug "Using custom anaconda package #{custom_anaconda_pkg}"
     `rm -rf #{s2dir}/squashfs-root/usr/share/anaconda/pixmaps`
-    `cd #{s2dir}/squashfs-root/ && rpm2cpio #{File.expand_path(custom_anaconda_pkg)} | cpio -iud`
+    `cd #{s2dir}/squashfs-root/ && rpm2cpio #{File.expand_path(custom_anaconda_pkg)} | cpio --quiet -iud`
   else
     if anaconda_pixmaps_dir and File.directory?(anaconda_pixmaps_dir)
       Dir["#{anaconda_pixmaps_dir}/*.png"].each do |img|
@@ -110,7 +125,8 @@ def do_stage2_branding(stage2_file,
   end
 
   if custom_redhat_logos_pkg
-    `cd #{s2dir}/squashfs-root/ && rpm2cpio #{File.expand_path(custom_redhat_logos_pkg)} | cpio -iud`
+    debug "Using custom redhat-logos package #{custom_redhat_logos_pkg}"
+    `cd #{s2dir}/squashfs-root/ && rpm2cpio #{File.expand_path(custom_redhat_logos_pkg)} | cpio -iud --quiet`
   end
 
   `cd #{s2dir} && mksquashfs squashfs-root stage2.img`
@@ -133,6 +149,11 @@ end
 def info(msg)
   Log.info msg
   puts msg
+end
+
+def warn(msg)
+  Log.warn msg
+  puts "WARNING: #{msg}"
 end
 
 def trim_rpms(minlist, trimdir)

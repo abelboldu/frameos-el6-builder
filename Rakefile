@@ -19,6 +19,7 @@ begin
       packages/*
       vendor/**/*
       images/**/*
+      scripts/*
     )
   end
 rescue LoadError
