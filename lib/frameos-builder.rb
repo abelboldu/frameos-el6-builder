@@ -5,7 +5,7 @@ require 'logger'
 require 'fileutils'
 require File.join(File.dirname(__FILE__), "rpmdev")
 
-FRAMEOS_BUILDER_VERSION = '0.3.1'
+FRAMEOS_BUILDER_VERSION = '0.3.1.6'
 TMPDIR = '/tmp/frameos-builder'
 RESOURCES_DIR = File.join(File.dirname(__FILE__),'../resources')
 IMAGES_DIR = File.join(File.dirname(__FILE__),'../images')
@@ -18,6 +18,18 @@ EXIT_MOUNTFAILED = 2
 EXIT_UMOUNTFAILED = 3
 
 def requirements_ok? 
+  if not File.exist? "/usr/bin/xz"
+    error "xz not found in /usr/bin/xz"
+    return false
+  end
+  if not File.exist? "/usr/bin/find"
+    error "find not found in /usr/bin/find"
+    return false
+  end
+  if not File.exist? "/bin/cpio"
+    error "cpio not found in /bin/cpio"
+    return false
+  end
   if not File.exist? "/usr/bin/which"
     error "which not found in /usr/bin/which"
     return false
@@ -26,7 +38,6 @@ def requirements_ok?
     error "mkisofs not found in /usr/bin/mkisofs"
     return false
   end
-
   if not File.exist? "/sbin/mksquashfs"
     error "mksquashfs not found in /sbin/mksquashfs"
     return false
@@ -40,13 +51,13 @@ end
 
 def supported_environment?
   return false if not File.exist?('/etc/redhat-release')
-  return false if File.read('/etc/redhat-release') !~ /.*(CentOS|FrameOS) release 5.*/
+  return false if File.read('/etc/redhat-release') !~ /.*(CentOS|FrameOS) release 6.*/
   return true
 end
 
 def default_pkg(pkg_name, base_dir = PACKAGES_DIR)
   pkg = Dir["#{base_dir}/*.rpm"].find { |pkg| pkg =~ /#{pkg_name}-\d+.*/ }
-  return (pkg.split '/').last
+  # return (pkg.split '/').last # FIXME!!
 end
 
 def default_anaconda_pkg(base_dir = PACKAGES_DIR)
@@ -61,11 +72,13 @@ end
 def do_initrd_branding(initrd_file, product_name='FrameOS', 
                                     product_version = '1', 
                                     bugs_url = 'http://bugs.frameos.org')
-  #TODO
-  # check if gzip, find and cpio are present
+  # TODO
+  # check if xz, find and cpio are present
   #
   Dir.mkdir "#{TMPDIR}/initrd.dir"
-  `cd #{TMPDIR}/initrd.dir && gzip -dc #{initrd_file} | cpio --quiet -iud`
+    # in 6.x initrd is in lzma format
+    # `cd #{TMPDIR}/initrd.dir && gzip -dc #{initrd_file} | cpio --quiet -iud` # Centos 5.7 
+  `cd #{TMPDIR}/initrd.dir && xz --decompress --format=lzma --stdout #{initrd_file} | cpio --quiet -iudm`
   File.open "#{TMPDIR}/initrd.dir/.buildstamp","w" do |f|
     f.puts "#{Time.now.strftime '%Y%m%d0001.x86_64'}"
     f.puts product_name
@@ -73,8 +86,8 @@ def do_initrd_branding(initrd_file, product_name='FrameOS',
     f.puts product_name
     f.puts bugs_url
   end
-  `cd #{TMPDIR}/initrd.dir && find ./|cpio --quiet -H newc -o > #{TMPDIR}/initrd`
-  `cd #{TMPDIR} && gzip initrd && mv initrd.gz initrd.img`
+  # `cd #{TMPDIR}/initrd.dir && find ./|cpio --quiet -H newc -o > #{TMPDIR}/initrd`
+  `cd #{TMPDIR}/initrd.dir && find ./|cpio --quiet -H newc -o | xz --format=lzma > #{TMPDIR}/initrd.img`
   `cd #{TMPDIR} && cp initrd.img newiso/isolinux/`
   if CLEANUP_ENV
     `rm -rf #{TMPDIR}/initrd.dir`
@@ -129,8 +142,8 @@ def do_stage2_branding(stage2_file,
     `cd #{s2dir}/squashfs-root/ && rpm2cpio #{File.expand_path(custom_redhat_logos_pkg)} | cpio -iud --quiet`
   end
 
-  `cd #{s2dir} && mksquashfs squashfs-root stage2.img`
-  `cd #{s2dir} && mv stage2.img #{TMPDIR}/newiso/images/`
+  `cd #{s2dir} && mksquashfs squashfs-root install.img`
+  `cd #{s2dir} && mv install.img #{TMPDIR}/newiso/images/`
   if CLEANUP_ENV
     `rm -rf #{s2dir}`
   end
